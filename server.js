@@ -25,6 +25,22 @@ const insertApplication = db.prepare(`
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+// Request logging middleware
+app.use((req, res, next) => {
+    const startTime = Date.now();
+
+    res.on("finish", () => {
+        console.log({
+            timestamp: new Date().toISOString(),
+            method: req.method,
+            path: req.path,
+            status: res.statusCode,
+            duration: `${Date.now() - startTime}ms`
+        });
+    });
+
+    next();
+});
 
 // Security headers
 app.use(helmet());
@@ -49,7 +65,23 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Health-check endpoint
 app.get("/api/health", (req, res) => {
-    res.json({ status: "OK", message: "Secure backend is running" });
+    try {
+        db.prepare("SELECT 1").get();
+
+        res.status(200).json({
+            status: "OK",
+            message: "Secure backend is running",
+            database: "Connected"
+        });
+
+    } catch (error) {
+        console.error("Health check failed:", error);
+
+        res.status(503).json({
+            status: "ERROR",
+            message: "Database connection failed"
+        });
+    }
 });
 
 // Submit application
@@ -97,6 +129,7 @@ app.post("/api/applications", (req, res) => {
         cleanEmail,
         cleanMessage
     );
+    console.log("Application saved successfully. ID:", result.lastInsertRowid);
 
     return res.status(201).json({
         success: true,
